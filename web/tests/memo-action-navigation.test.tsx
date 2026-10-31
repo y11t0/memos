@@ -1,13 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import toast from "react-hot-toast";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMemoActionHandlers } from "@/components/MemoActionMenu/hooks";
+import { NewMemoProvider, useNewMemo } from "@/contexts/NewMemoContext";
 import { State } from "@/types/proto/api/common_pb";
-import type { Memo } from "@/types/proto/api/memo_service_pb";
+import { type Memo, Visibility } from "@/types/proto/api/memo_service_pb";
 
 const mocks = vi.hoisted(() => ({
+  createMemo: vi.fn(),
   updateMemo: vi.fn(),
   deleteMemo: vi.fn(),
   copy: vi.fn(),
@@ -20,6 +23,7 @@ vi.mock("@/hooks/useMemoQueries", () => ({
     comments: (name: string) => ["memos", name, "comments"],
     detail: (name: string) => ["memos", name, "detail"],
   },
+  useCreateMemo: () => ({ mutateAsync: mocks.createMemo }),
   useUpdateMemo: () => ({ mutateAsync: mocks.updateMemo }),
   useDeleteMemo: () => ({ mutateAsync: mocks.deleteMemo }),
 }));
@@ -45,6 +49,8 @@ const createMemo = (state: State, parent = ""): Memo =>
     name: "memos/1",
     creator: "users/alice",
     content: "memo",
+    visibility: Visibility.PROTECTED,
+    space: "spaces/work",
     state,
     parent,
   }) as Memo;
@@ -54,7 +60,9 @@ const renderActions = (state: State, parent = "", parentPage?: string) => {
   const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/memos/1"]}>{children}</MemoryRouter>
+      <MemoryRouter initialEntries={["/memos/1"]}>
+        <NewMemoProvider>{children}</NewMemoProvider>
+      </MemoryRouter>
     </QueryClientProvider>
   );
 
@@ -66,7 +74,8 @@ const renderActions = (state: State, parent = "", parentPage?: string) => {
         parentPage,
         setDeleteDialogOpen: vi.fn(),
       });
-      return { handlers, pathname: location.pathname, search: location.search };
+      const { newMemoName } = useNewMemo();
+      return { handlers, pathname: location.pathname, search: location.search, newMemoName };
     },
     { wrapper },
   );
@@ -75,6 +84,7 @@ const renderActions = (state: State, parent = "", parentPage?: string) => {
 
 describe("Memo detail mutation navigation", () => {
   beforeEach(() => {
+    mocks.createMemo.mockReset().mockResolvedValue({ name: "memos/2" });
     mocks.updateMemo.mockReset().mockResolvedValue(undefined);
     mocks.deleteMemo.mockReset().mockResolvedValue(undefined);
     mocks.copy.mockReset();
@@ -128,5 +138,30 @@ describe("Memo detail mutation navigation", () => {
     const { result } = renderActions(State.NORMAL, parent);
     act(() => result.current.handlers.handleCopyLink());
     expect(mocks.copy).toHaveBeenCalledWith(link);
+  });
+
+  it("duplicates a memo's content, visibility and space into a new memo and puts it first", async () => {
+    const { result, invalidateQueries } = renderActions(State.NORMAL);
+    await act(() => result.current.handlers.handleDuplicateMemoClick());
+    expect(mocks.createMemo).toHaveBeenCalledOnce();
+    expect(mocks.createMemo.mock.calls[0][0].memo).toMatchObject({
+      content: "memo",
+      visibility: Visibility.PROTECTED,
+      space: "spaces/work",
+    });
+    expect(mocks.createMemo.mock.calls[0][0].memo.name).toBe("");
+    expect(mocks.updateMemo).not.toHaveBeenCalled();
+    expect(result.current.newMemoName).toBe("memos/2");
+    expect(toast.success).toHaveBeenCalledWith("message.duplicated-successfully");
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: ["memos", "memos/1", "detail"] });
+  });
+
+  it("reports a failed duplicate without marking a new memo", async () => {
+    mocks.createMemo.mockRejectedValue(new Error("boom"));
+    const { result } = renderActions(State.NORMAL);
+    await act(() => result.current.handlers.handleDuplicateMemoClick());
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(result.current.newMemoName).toBeNull();
   });
 });

@@ -1,17 +1,19 @@
+import { create } from "@bufbuild/protobuf";
 import { useQueryClient } from "@tanstack/react-query";
 import copy from "copy-to-clipboard";
 import { useCallback } from "react";
 import toast from "react-hot-toast";
 import { useLocation } from "react-router-dom";
 import { useInstance } from "@/contexts/InstanceContext";
-import { memoKeys, useDeleteMemo, useUpdateMemo } from "@/hooks/useMemoQueries";
+import { useNewMemo } from "@/contexts/NewMemoContext";
+import { memoKeys, useCreateMemo, useDeleteMemo, useUpdateMemo } from "@/hooks/useMemoQueries";
 import useNavigateTo from "@/hooks/useNavigateTo";
 import { userKeys } from "@/hooks/useUserQueries";
 import { handleError } from "@/lib/error";
 import { extractMemoIdFromName } from "@/lib/resource-names";
 import { ROUTES } from "@/router/routes";
 import { State } from "@/types/proto/api/common_pb";
-import type { Memo } from "@/types/proto/api/memo_service_pb";
+import { type Memo, MemoSchema } from "@/types/proto/api/memo_service_pb";
 import { useTranslate } from "@/utils/i18n";
 import { checkAllTasks, uncheckAllTasks } from "@/utils/markdown-task-actions";
 import { isMemoDetailPath } from "../MemoView/navigation";
@@ -29,6 +31,8 @@ export const useMemoActionHandlers = ({ memo, parentPage, onEdit, setDeleteDialo
   const navigateTo = useNavigateTo();
   const queryClient = useQueryClient();
   const { profile } = useInstance();
+  const { markNewMemo } = useNewMemo();
+  const { mutateAsync: createMemo } = useCreateMemo();
   const { mutateAsync: updateMemo } = useUpdateMemo();
   const { mutateAsync: deleteMemo } = useDeleteMemo();
   const isInMemoDetailPage = isMemoDetailPath(location.pathname, memo.name);
@@ -109,6 +113,19 @@ export const useMemoActionHandlers = ({ memo, parentPage, onEdit, setDeleteDialo
     memoUpdatedCallback();
   }, [memo.name, memo.state, t, isInMemoDetailPage, navigateTo, memoUpdatedCallback, updateMemo]);
 
+  const handleDuplicateMemoClick = useCallback(async () => {
+    try {
+      // The space travels with the content and visibility, which SPACE visibility needs.
+      const duplicate = await createMemo({
+        memo: create(MemoSchema, { content: memo.content, visibility: memo.visibility, space: memo.space }),
+      });
+      markNewMemo(duplicate.name);
+      toast.success(t("message.duplicated-successfully"));
+    } catch (error: unknown) {
+      handleError(error, toast.error, { context: "Duplicate memo", fallbackMessage: "An error occurred" });
+    }
+  }, [memo.content, memo.visibility, memo.space, t, createMemo, markNewMemo]);
+
   const handleCopyLink = useCallback(() => {
     let host = profile.instanceUrl;
     if (host === "") {
@@ -160,6 +177,7 @@ export const useMemoActionHandlers = ({ memo, parentPage, onEdit, setDeleteDialo
     handleTogglePinMemoBtnClick,
     handleEditMemoClick,
     handleToggleMemoStatusClick,
+    handleDuplicateMemoClick,
     handleCopyLink,
     handleCopyContent,
     handleCheckAllTaskListItemsClick,

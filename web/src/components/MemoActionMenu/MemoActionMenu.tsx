@@ -6,6 +6,7 @@ import {
   BookmarkPlusIcon,
   CheckCheckIcon,
   CopyIcon,
+  CopyPlusIcon,
   Edit3Icon,
   FileTextIcon,
   LinkIcon,
@@ -36,7 +37,7 @@ import type { MemoActionMenuProps } from "./types";
 
 /**
  * The memo's action menu, grouped by what each action does to the card:
- * write on it (Edit, the task action), place it (Pin, Archive), reach it beyond
+ * write on it (Edit, the task action), place it (Pin, Duplicate, Archive), reach it beyond
  * the feed (Open its page, Copy its link or content), then Delete last.
  * A memo's Space is changed in the editor, not here. An archived memo offers
  * only Restore and Delete, and a viewer only Open and Copy.
@@ -60,6 +61,7 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
     handleTogglePinMemoBtnClick,
     handleEditMemoClick,
     handleToggleMemoStatusClick,
+    handleDuplicateMemoClick,
     handleCopyLink,
     handleCopyContent,
     handleCheckAllTaskListItemsClick,
@@ -155,13 +157,17 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
             </DropdownMenuItem>
           ))}
 
-        {/* A comment has no place of its own to pin or archive; it lives under its parent. */}
+        {/* A comment has no place of its own to pin, duplicate or archive; it lives under its parent. */}
         {!isComment && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleTogglePinMemoBtnClick}>
               {memo.pinned ? <BookmarkMinusIcon /> : <BookmarkPlusIcon />}
               {memo.pinned ? t("common.unpin") : t("common.pin")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDuplicateMemoClick}>
+              <CopyPlusIcon />
+              {t("common.duplicate")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleToggleMemoStatusClick}>
               <ArchiveIcon />

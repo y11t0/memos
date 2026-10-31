@@ -11,6 +11,7 @@ const handlers = vi.hoisted(() => ({
   handleTogglePinMemoBtnClick: vi.fn(),
   handleEditMemoClick: vi.fn(),
   handleToggleMemoStatusClick: vi.fn(),
+  handleDuplicateMemoClick: vi.fn(),
   handleCopyLink: vi.fn(),
   handleCopyContent: vi.fn(),
   handleCheckAllTaskListItemsClick: vi.fn(),
@@ -64,7 +65,15 @@ describe("MemoActionMenu", () => {
 
   it("groups an owner's memo actions by what they do to the card and puts Delete last, with no Move entry", async () => {
     await openMenu(memoOf({ space: "spaces/work" }));
-    expect(menuItemLabels()).toEqual(["common.edit", "common.pin", "common.archive", "common.open", "common.copy", "common.delete"]);
+    expect(menuItemLabels()).toEqual([
+      "common.edit",
+      "common.pin",
+      "common.duplicate",
+      "common.archive",
+      "common.open",
+      "common.copy",
+      "common.delete",
+    ]);
     const separators = screen.getAllByRole("separator");
     expect(separators[separators.length - 1].nextElementSibling).toBe(screen.getByRole("menuitem", { name: "common.delete" }));
   });
@@ -73,6 +82,12 @@ describe("MemoActionMenu", () => {
     await openMenu(memoOf({ pinned: true }));
     fireEvent.click(screen.getByRole("menuitem", { name: "common.unpin" }));
     expect(handlers.handleTogglePinMemoBtnClick).toHaveBeenCalledOnce();
+  });
+
+  it("duplicates the memo from the Duplicate item", async () => {
+    await openMenu(memoOf());
+    fireEvent.click(screen.getByRole("menuitem", { name: "common.duplicate" }));
+    expect(handlers.handleDuplicateMemoClick).toHaveBeenCalledOnce();
   });
 
   it("opens the memo through a real link that keeps the origin page", async () => {
@@ -88,7 +103,7 @@ describe("MemoActionMenu", () => {
   it("hides Open on the memo's own page", async () => {
     handlers.isInMemoDetailPage = true;
     await openMenu(memoOf());
-    expect(menuItemLabels()).toEqual(["common.edit", "common.pin", "common.archive", "common.copy", "common.delete"]);
+    expect(menuItemLabels()).toEqual(["common.edit", "common.pin", "common.duplicate", "common.archive", "common.copy", "common.delete"]);
   });
 
   it.each([
@@ -120,17 +135,19 @@ describe("MemoActionMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "common.more" }));
     await screen.findByRole("menuitem", { name: "common.restore" });
     expect(menuItemLabels()).toEqual(["common.restore", "common.delete"]);
+    expect(screen.queryByRole("menuitem", { name: "common.duplicate" })).not.toBeInTheDocument();
   });
 
   it("gives a viewer Open and Copy only", async () => {
     await openMenu(memoOf(), { readonly: true });
     expect(menuItemLabels()).toEqual(["common.open", "common.copy"]);
+    expect(screen.queryByRole("menuitem", { name: "common.duplicate" })).not.toBeInTheDocument();
   });
 
   it.each([
     [false, ["common.edit", "common.copy", "common.delete"]],
     [true, ["common.edit", "memo.task-actions.check-all", "common.copy", "common.delete"]],
-  ] as const)("shows comment actions without Open, Pin, Archive or More (tasks: %s)", async (hasTaskList, labels) => {
+  ] as const)("shows comment actions without Open, Pin, Duplicate, Archive or More (tasks: %s)", async (hasTaskList, labels) => {
     await openMenu(memoOf({ name: "memos/2", parent: "memos/1", property: { hasTaskList, hasIncompleteTasks: hasTaskList } }));
     expect(menuItemLabels()).toEqual(labels);
 
